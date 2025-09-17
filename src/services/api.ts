@@ -2,6 +2,14 @@ import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
+// Log API configuration in development
+if (import.meta.env.DEV) {
+  console.log('🚀 API Configuration:');
+  console.log('📡 Base URL:', API_BASE_URL);
+  console.log('🌐 Frontend URL:', window.location.origin);
+  console.log('⚙️ Environment:', import.meta.env.MODE);
+}
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,

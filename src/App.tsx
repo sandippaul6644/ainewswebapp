@@ -9,6 +9,8 @@ import SearchResults from './pages/SearchResults';
 import Footer from './components/Footer';
 import AdSense from './components/AdSense';
 import ScrollToTop from './components/ScrollToTop';
+import ServerStatus from './components/ServerStatus';
+import DevInfo from './components/DevInfo';
 
 function App() {
   return (
@@ -35,6 +37,12 @@ function App() {
           
           {/* Footer AdSense */}
           <AdSense slot="footer" />
+          
+          {/* Server Status Display */}
+          <ServerStatus />
+          
+          {/* Development Info Panel (only in development) */}
+          {import.meta.env.DEV && <DevInfo />}
         </div>
       </Router>
     </HelmetProvider>

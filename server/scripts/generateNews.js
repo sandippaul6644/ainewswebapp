@@ -1,27 +1,44 @@
 import OpenAI from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import News from '../models/News.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Initialize OpenAI clients with different API keys
-const apiKeys = [
-  process.env.OPENAI_API_KEY_1,
-  process.env.OPENAI_API_KEY_2,
-  process.env.OPENAI_API_KEY_3
-].filter(Boolean);
+// OpenAI Configuration
+const apiKey = process.env.OPENAI_API_KEY;
+const primaryModel = process.env.OPENAI_PRIMARY_MODEL || 'gpt-4o-mini';
+const fallbackModel = process.env.OPENAI_FALLBACK_MODEL || 'gpt-3.5-turbo';
+const maxTokensPerArticle = parseInt(process.env.MAX_TOKENS_PER_ARTICLE) || 800;
+const dailyTokenQuota = parseInt(process.env.DAILY_TOKEN_QUOTA) || 200000;
 
-const imageApiKey = process.env.OPENAI_IMAGE_API_KEY;
+const openai = new OpenAI({ apiKey });
 
-let currentKeyIndex = 0;
+// Gemini Configuration (for future image generation)
+const geminiApiKey = process.env.GEMINI_API_KEY;
+const genAI = geminiApiKey ? new GoogleGenerativeAI(geminiApiKey) : null;
 
-const getOpenAIClient = () => {
-  const apiKey = apiKeys[currentKeyIndex];
-  currentKeyIndex = (currentKeyIndex + 1) % apiKeys.length;
-  return new OpenAI({ apiKey });
+// Token tracking
+let dailyTokenUsage = 0;
+let lastResetDate = new Date().toDateString();
+
+const resetDailyTokens = () => {
+  const today = new Date().toDateString();
+  if (today !== lastResetDate) {
+    dailyTokenUsage = 0;
+    lastResetDate = today;
+    console.log('🔄 Daily token usage reset');
+  }
 };
 
-const imageClient = imageApiKey ? new OpenAI({ apiKey: imageApiKey }) : null;
+const checkTokenQuota = (estimatedTokens) => {
+  resetDailyTokens();
+  if (dailyTokenUsage + estimatedTokens > dailyTokenQuota) {
+    throw new Error(`⚠️ Daily token quota (${dailyTokenQuota}) would be exceeded. Used: ${dailyTokenUsage}, Requested: ${estimatedTokens}`);
+  }
+};
+
+
 
 // Indian states and major cities
 const locations = [
@@ -64,23 +81,26 @@ const generateImagePrompt = (title, category) => {
 
 const generateNewsArticle = async (category, location) => {
   try {
-    const openai = getOpenAIClient();
+    checkTokenQuota(maxTokensPerArticle);
+    
     const prompt = generateNewsPrompt(category, location);
+    let model = primaryModel;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+      model,
+      max_tokens: maxTokensPerArticle,
       messages: [
         {
           role: "system",
-          content: "You are a professional Indian news writer. Generate realistic, engaging news articles with proper structure including title, content, and relevant details. Ensure the content is appropriate and factual in tone."
+          content: "You are a professional Indian news writer. Generate realistic, engaging news articles with proper structure. Keep responses concise but informative."
         },
         {
           role: "user",
-          content: `${prompt}\n\nPlease provide the response in the following JSON format:
+          content: `${prompt}\n\nRespond in JSON format:
           {
             "title": "Engaging news headline",
-            "content": "Full article content (minimum 300 words)",
-            "excerpt": "Brief summary (50-100 words)",
+            "content": "Full article content (250-400 words)",
+            "excerpt": "Brief summary (40-80 words)",
             "tags": ["tag1", "tag2", "tag3"],
             "seoTitle": "SEO optimized title",
             "seoDescription": "SEO meta description",
@@ -88,44 +108,179 @@ const generateNewsArticle = async (category, location) => {
           }`
         }
       ],
-      temperature: 0.8
+      temperature: 0.7
     });
+
+    // Track token usage
+    const tokensUsed = completion.usage?.total_tokens || maxTokensPerArticle;
+    dailyTokenUsage += tokensUsed;
+    console.log(`📊 Tokens used: ${tokensUsed}, Daily total: ${dailyTokenUsage}/${dailyTokenQuota}`);
 
     const response = completion.choices[0].message.content;
     return JSON.parse(response);
   } catch (error) {
-    console.error('Error generating news article:', error);
-    throw error;
+    if (error.message.includes('quota')) {
+      throw error;
+    }
+    
+    // Try fallback model
+    console.log(`⚠️ Primary model failed, trying ${fallbackModel}...`);
+    try {
+      const completion = await openai.chat.completions.create({
+        model: fallbackModel,
+        max_tokens: maxTokensPerArticle,
+        messages: [
+          {
+            role: "system",
+            content: "Generate a concise Indian news article in JSON format."
+          },
+          {
+            role: "user",
+            content: generateNewsPrompt(category, location)
+          }
+        ],
+        temperature: 0.7
+      });
+      
+      const tokensUsed = completion.usage?.total_tokens || maxTokensPerArticle;
+      dailyTokenUsage += tokensUsed;
+      
+      const response = completion.choices[0].message.content;
+      return JSON.parse(response);
+    } catch (fallbackError) {
+      console.error('Both models failed:', fallbackError);
+      throw fallbackError;
+    }
   }
 };
 
 const generateNewsImage = async (title, category) => {
-  if (!imageClient) return null;
+  // For now, skip image generation to focus on text content
+  // Gemini's image generation API is still evolving
+  console.log(`🖼️ Skipping image generation for: ${title.substring(0, 40)}...`);
+  
+  // Return a placeholder image URL based on category
+  const placeholderImages = {
+    politics: 'https://via.placeholder.com/800x600/dc2626/ffffff?text=Politics+News',
+    sports: 'https://via.placeholder.com/800x600/16a34a/ffffff?text=Sports+News',
+    technology: 'https://via.placeholder.com/800x600/2563eb/ffffff?text=Tech+News',
+    entertainment: 'https://via.placeholder.com/800x600/9333ea/ffffff?text=Entertainment',
+    business: 'https://via.placeholder.com/800x600/eab308/ffffff?text=Business+News',
+    health: 'https://via.placeholder.com/800x600/ec4899/ffffff?text=Health+News',
+    education: 'https://via.placeholder.com/800x600/6366f1/ffffff?text=Education+News',
+    crime: 'https://via.placeholder.com/800x600/ef4444/ffffff?text=Crime+News',
+    weather: 'https://via.placeholder.com/800x600/06b6d4/ffffff?text=Weather+News'
+  };
+  
+  return placeholderImages[category] || placeholderImages.politics;
+};
 
+
+
+export const generateInitialNews = async () => {
   try {
-    const prompt = generateImagePrompt(title, category);
+    console.log('Ensuring 5 articles per category (40 total)...');
     
-    const response = await imageClient.images.generate({
-      model: "dall-e-3",
-      prompt: prompt,
-      size: "1024x1024",
-      quality: "standard",
-      n: 1,
+    // Check existing articles per category
+    const categoryStats = await News.aggregate([
+      { $group: { _id: '$category', count: { $sum: 1 } } }
+    ]);
+    
+    const existingCounts = {};
+    categoryStats.forEach(stat => {
+      existingCounts[stat._id] = stat.count;
     });
+    
+    // Validate API key
+    if (!apiKey || apiKey.includes('your-api-key')) {
+      throw new Error('❌ Valid OpenAI API key required. Please update OPENAI_API_KEY in your .env file.');
+    }
+    
+    console.log('✅ Valid API keys found. Generating real AI news...');
 
-    return response.data[0].url;
+    let totalGenerated = 0;
+    
+    for (const category of categories) {
+      const existing = existingCounts[category] || 0;
+      const needed = Math.max(0, 5 - existing);
+      
+      if (needed === 0) {
+        console.log(`Category ${category}: Already has ${existing} articles`);
+        continue;
+      }
+      
+      console.log(`Category ${category}: Generating ${needed} real AI articles (has ${existing})`);
+      
+      for (let i = 0; i < needed; i++) {
+        try {
+          const location = locations[Math.floor(Math.random() * locations.length)];
+          const city = location.cities[Math.floor(Math.random() * location.cities.length)];
+          const selectedLocation = { state: location.state, city };
+
+          console.log(`🤖 Generating AI article ${i + 1}/${needed} for ${category} in ${city}...`);
+          const article = await generateNewsArticle(category, selectedLocation);
+          
+          const trending = (existing + i) === 1;
+          const featured = (existing + i) === 0;
+
+          const newsData = {
+            title: article.title,
+            content: article.content,
+            excerpt: article.excerpt,
+            category,
+            state: selectedLocation.state,
+            city: selectedLocation.city,
+            imageUrl: '',
+            tags: article.tags || [],
+            trending,
+            featured,
+            seoTitle: article.seoTitle || article.title,
+            seoDescription: article.seoDescription || article.excerpt,
+            seoKeywords: article.seoKeywords || [],
+            generationMetadata: {
+              model: primaryModel,
+              generatedAt: new Date(),
+              tokensUsed: dailyTokenUsage
+            }
+          };
+
+          const news = new News(newsData);
+          await news.save();
+          totalGenerated++;
+
+          console.log(`✅ Generated: ${article.title.substring(0, 60)}...`);
+          
+          // Delay to avoid rate limiting and manage token usage
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          
+        } catch (error) {
+          console.error(`Error generating article for ${category}:`, error);
+          continue;
+        }
+      }
+    }
+
+    if (totalGenerated === 0) {
+      throw new Error('❌ Failed to generate any real news articles. Check your OpenAI API keys and internet connection.');
+    }
+    
+    console.log(`✅ Successfully generated ${totalGenerated} real AI news articles`);
+
   } catch (error) {
-    console.error('Error generating image:', error);
-    return null;
+    console.error('❌ Error in generateInitialNews:', error.message);
+    throw error; // No sample data fallback - must use real AI
   }
 };
 
 export const generateDailyNews = async (count = 50) => {
   try {
-    console.log(`Starting generation of ${count} news articles...`);
+    console.log(`Starting generation of ${count} news articles with ${primaryModel}...`);
     
     for (let i = 0; i < count; i++) {
       try {
+        // Check token quota before generating
+        checkTokenQuota(maxTokensPerArticle);
+        
         // Select random category and location
         const category = categories[Math.floor(Math.random() * categories.length)];
         const location = locations[Math.floor(Math.random() * locations.length)];
@@ -134,6 +289,7 @@ export const generateDailyNews = async (count = 50) => {
         const selectedLocation = { state: location.state, city };
 
         // Generate article
+        console.log(`📝 Generating article ${i + 1}/${count}: ${category} from ${city}...`);
         const article = await generateNewsArticle(category, selectedLocation);
         
         // Generate image
@@ -160,27 +316,31 @@ export const generateDailyNews = async (count = 50) => {
           seoDescription: article.seoDescription || article.excerpt,
           seoKeywords: article.seoKeywords || [],
           generationMetadata: {
-            apiKeyUsed: currentKeyIndex.toString(),
+            model: primaryModel,
             generatedAt: new Date(),
-            model: 'gpt-4'
+            tokensUsed: dailyTokenUsage
           }
         };
 
         const news = new News(newsData);
         await news.save();
 
-        console.log(`Generated: ${article.title} (${category} - ${selectedLocation.city})`);
+        console.log(`✅ Generated: ${article.title.substring(0, 50)}... (${category})`);
         
         // Add delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 3000));
         
       } catch (error) {
-        console.error(`Error generating article ${i + 1}:`, error);
+        if (error.message.includes('quota')) {
+          console.log(`⚠️ Daily token quota reached. Generated ${i} articles.`);
+          break;
+        }
+        console.error(`Error generating article ${i + 1}:`, error.message);
         continue;
       }
     }
 
-    console.log(`Successfully generated ${count} news articles`);
+    console.log(`✅ Daily news generation completed. Token usage: ${dailyTokenUsage}/${dailyTokenQuota}`);
   } catch (error) {
     console.error('Error in generateDailyNews:', error);
     throw error;
@@ -189,4 +349,4 @@ export const generateDailyNews = async (count = 50) => {
 
 if (process.argv.includes('--run')) {
   generateDailyNews().then(() => process.exit(0));
-}
+} {
