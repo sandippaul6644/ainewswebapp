@@ -137,33 +137,31 @@ app.post('/api/generate-news', async (req, res) => {
 
 // Setup cron jobs
 const setupCronJobs = () => {
-  // Schedule daily news generation at 6 AM IST
-  cron.schedule('0 6 * * *', async () => {
-    console.log('Starting daily news generation...');
+  // Generate articles immediately when server starts
+  setTimeout(async () => {
+    console.log('Starting initial news generation...');
     try {
-      await generateDailyNews();
-      console.log('Daily news generation completed');
+      await generateDailyNews(9); // Generate 9 articles immediately
+      console.log('Initial news generation completed');
     } catch (error) {
-      console.error('Error in daily news generation:', error);
+      console.error('Error in initial news generation:', error);
     }
-  }, {
-    timezone: 'Asia/Kolkata'
-  });
+  }, 5000); // Wait 5 seconds after server start
 
-  // Schedule trending news updates every 4 hours
-  cron.schedule('0 */4 * * *', async () => {
-    console.log('Updating trending news...');
+  // Schedule news generation every hour
+  cron.schedule('0 * * * *', async () => {
+    console.log('Starting hourly news generation...');
     try {
-      await generateDailyNews(10); // Generate 10 trending articles
-      console.log('Trending news update completed');
+      await generateDailyNews(9); // Generate 9 articles every hour
+      console.log('Hourly news generation completed');
     } catch (error) {
-      console.error('Error in trending news update:', error);
+      console.error('Error in hourly news generation:', error);
     }
   }, {
     timezone: 'Asia/Kolkata'
   });
   
-  console.log('Cron jobs scheduled successfully');
+  console.log('Hourly news generation scheduled successfully');
 };
 
 // Initialize everything

@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "generate-news": "node server/scripts/generateNews.js",
+
     "kill-port": "kill-port.bat",
     "start": "npm run kill-port && npm run dev"
   },

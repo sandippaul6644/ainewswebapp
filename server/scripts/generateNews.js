@@ -18,23 +18,34 @@ const openai = new OpenAI({ apiKey });
 const geminiApiKey = process.env.GEMINI_API_KEY;
 const genAI = geminiApiKey ? new GoogleGenerativeAI(geminiApiKey) : null;
 
-// Token tracking
+// Token and Image tracking
 let dailyTokenUsage = 0;
+let dailyImageUsage = 0;
 let lastResetDate = new Date().toDateString();
+const dailyImageQuota = parseInt(process.env.DAILY_IMAGE_QUOTA) || 50;
+const imageGenerationEnabled = process.env.IMAGE_GENERATION_ENABLED === 'true';
 
-const resetDailyTokens = () => {
+const resetDailyCounters = () => {
   const today = new Date().toDateString();
   if (today !== lastResetDate) {
     dailyTokenUsage = 0;
+    dailyImageUsage = 0;
     lastResetDate = today;
-    console.log('🔄 Daily token usage reset');
+    console.log('🔄 Daily usage counters reset');
   }
 };
 
 const checkTokenQuota = (estimatedTokens) => {
-  resetDailyTokens();
+  resetDailyCounters();
   if (dailyTokenUsage + estimatedTokens > dailyTokenQuota) {
     throw new Error(`⚠️ Daily token quota (${dailyTokenQuota}) would be exceeded. Used: ${dailyTokenUsage}, Requested: ${estimatedTokens}`);
+  }
+};
+
+const checkImageQuota = () => {
+  resetDailyCounters();
+  if (dailyImageUsage >= dailyImageQuota) {
+    throw new Error(`⚠️ Daily image quota (${dailyImageQuota}) exceeded. Used: ${dailyImageUsage}`);
   }
 };
 
@@ -154,25 +165,97 @@ const generateNewsArticle = async (category, location) => {
   }
 };
 
-const generateNewsImage = async (title, category) => {
-  // For now, skip image generation to focus on text content
-  // Gemini's image generation API is still evolving
-  console.log(`🖼️ Skipping image generation for: ${title.substring(0, 40)}...`);
-  
-  // Return a placeholder image URL based on category
-  const placeholderImages = {
-    politics: 'https://via.placeholder.com/800x600/dc2626/ffffff?text=Politics+News',
-    sports: 'https://via.placeholder.com/800x600/16a34a/ffffff?text=Sports+News',
-    technology: 'https://via.placeholder.com/800x600/2563eb/ffffff?text=Tech+News',
-    entertainment: 'https://via.placeholder.com/800x600/9333ea/ffffff?text=Entertainment',
-    business: 'https://via.placeholder.com/800x600/eab308/ffffff?text=Business+News',
-    health: 'https://via.placeholder.com/800x600/ec4899/ffffff?text=Health+News',
-    education: 'https://via.placeholder.com/800x600/6366f1/ffffff?text=Education+News',
-    crime: 'https://via.placeholder.com/800x600/ef4444/ffffff?text=Crime+News',
-    weather: 'https://via.placeholder.com/800x600/06b6d4/ffffff?text=Weather+News'
+const generateNewsImage = async (title, category, location) => {
+  if (!imageGenerationEnabled) {
+    console.log(`⚠️ Image generation disabled, using fallback`);
+    const keywords = extractImageKeywords(title, category, location);
+    const searchQuery = keywords.join(',');
+    return `https://source.unsplash.com/800x600/?${encodeURIComponent(searchQuery)}`;
+  }
+
+  try {
+    checkImageQuota();
+    console.log(`🎨 Generating AI image for: ${title.substring(0, 40)}...`);
+    
+    const imagePrompt = createImagePrompt(title, category, location);
+    console.log(`📝 Image prompt: ${imagePrompt.substring(0, 100)}...`);
+    
+    const response = await openai.images.generate({
+      model: "dall-e-3",
+      prompt: imagePrompt,
+      n: 1,
+      size: "1024x1024",
+      quality: "standard",
+      style: "natural"
+    });
+    
+    if (response.data && response.data[0]) {
+      dailyImageUsage++;
+      console.log(`✅ Generated AI image (${dailyImageUsage}/${dailyImageQuota} daily)`);
+      return response.data[0].url;
+    }
+    
+    throw new Error('No image generated');
+    
+  } catch (error) {
+    if (error.message.includes('quota')) {
+      console.log(`⚠️ ${error.message} - Using fallback image`);
+    } else {
+      console.error('❌ DALL-E failed:', error.message);
+    }
+    
+    const keywords = extractImageKeywords(title, category, location);
+    const searchQuery = keywords.join(',');
+    const fallbackUrl = `https://source.unsplash.com/800x600/?${encodeURIComponent(searchQuery)}`;
+    console.log(`📸 Using fallback image for: ${searchQuery}`);
+    return fallbackUrl;
+  }
+};
+
+const createImagePrompt = (title, category, location) => {
+  const basePrompts = {
+    politics: "A professional news photograph showing Indian government buildings, political rally, or official meeting",
+    sports: "A dynamic sports photograph showing Indian athletes, cricket stadium, or sporting event", 
+    technology: "A modern technology photograph showing Indian IT office, computers, or digital innovation",
+    entertainment: "A vibrant entertainment photograph showing Bollywood cinema, cultural event, or festival",
+    business: "A professional business photograph showing Indian corporate office, startup, or economic activity",
+    health: "A clean medical photograph showing Indian hospital, healthcare workers, or wellness program",
+    education: "An inspiring education photograph showing Indian school, students, or learning environment",
+    crime: "A serious news photograph showing Indian police, security measures, or law enforcement",
+    weather: "A dramatic weather photograph showing Indian monsoon, climate, or natural conditions"
   };
   
-  return placeholderImages[category] || placeholderImages.politics;
+  const basePrompt = basePrompts[category] || basePrompts.politics;
+  
+  // Extract key elements from title
+  const titleWords = title.toLowerCase().split(' ').slice(0, 5).join(' ');
+  
+  // Create comprehensive prompt
+  const prompt = `${basePrompt} related to "${titleWords}" in ${location?.city || 'India'}, ${location?.state || 'India'}. Professional news photography style, high quality, realistic, suitable for Indian news website, natural lighting, no text overlay.`;
+  
+  return prompt.substring(0, 400); // DALL-E prompt limit
+};
+
+const extractImageKeywords = (title, category, location) => {
+  const keywords = [category];
+  
+  if (location && location.city) {
+    keywords.push(location.city);
+  }
+  
+  const titleWords = title.toLowerCase()
+    .replace(/[^a-z\s]/g, '')
+    .split(' ')
+    .filter(word => 
+      word.length > 3 && 
+      !['news', 'latest', 'announces', 'launches', 'amid', 'with', 'from', 'this', 'that', 'will', 'have', 'been'].includes(word)
+    )
+    .slice(0, 3);
+  
+  keywords.push(...titleWords);
+  keywords.push('india');
+  
+  return keywords.slice(0, 5);
 };
 
 
@@ -223,6 +306,9 @@ export const generateInitialNews = async () => {
           const trending = (existing + i) === 1;
           const featured = (existing + i) === 0;
 
+          // Generate image
+          const imageUrl = await generateNewsImage(article.title, category, selectedLocation);
+          
           const newsData = {
             title: article.title,
             content: article.content,
@@ -230,7 +316,7 @@ export const generateInitialNews = async () => {
             category,
             state: selectedLocation.state,
             city: selectedLocation.city,
-            imageUrl: '',
+            imageUrl: imageUrl || '',
             tags: article.tags || [],
             trending,
             featured,
@@ -292,8 +378,8 @@ export const generateDailyNews = async (count = 50) => {
         console.log(`📝 Generating article ${i + 1}/${count}: ${category} from ${city}...`);
         const article = await generateNewsArticle(category, selectedLocation);
         
-        // Generate image
-        const imageUrl = await generateNewsImage(article.title, category);
+        // Generate AI image for the article
+        const imageUrl = await generateNewsImage(article.title, category, selectedLocation);
 
         // Determine if article should be trending or featured
         const trending = Math.random() < 0.15; // 15% chance
@@ -327,8 +413,8 @@ export const generateDailyNews = async (count = 50) => {
 
         console.log(`✅ Generated: ${article.title.substring(0, 50)}... (${category})`);
         
-        // Add delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        // Add delay to avoid rate limiting (both text and image generation)
+        await new Promise(resolve => setTimeout(resolve, 5000));
         
       } catch (error) {
         if (error.message.includes('quota')) {
@@ -349,4 +435,4 @@ export const generateDailyNews = async (count = 50) => {
 
 if (process.argv.includes('--run')) {
   generateDailyNews().then(() => process.exit(0));
-} {
+}

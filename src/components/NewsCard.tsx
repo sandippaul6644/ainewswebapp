@@ -37,6 +37,21 @@ const categoryColors: { [key: string]: string } = {
   trending: 'bg-orange-500'
 };
 
+const getCategoryGradient = (category: string): string => {
+  const gradients: { [key: string]: string } = {
+    politics: 'bg-gradient-to-br from-red-500 to-red-600',
+    sports: 'bg-gradient-to-br from-green-500 to-green-600',
+    technology: 'bg-gradient-to-br from-blue-500 to-blue-600',
+    entertainment: 'bg-gradient-to-br from-purple-500 to-purple-600',
+    business: 'bg-gradient-to-br from-yellow-500 to-yellow-600',
+    health: 'bg-gradient-to-br from-pink-500 to-pink-600',
+    education: 'bg-gradient-to-br from-indigo-500 to-indigo-600',
+    crime: 'bg-gradient-to-br from-red-600 to-red-700',
+    weather: 'bg-gradient-to-br from-cyan-500 to-cyan-600'
+  };
+  return gradients[category] || 'bg-gradient-to-br from-gray-500 to-gray-600';
+};
+
 export default function NewsCard({ news, index = 0 }: NewsCardProps) {
   const categoryColor = categoryColors[news.category] || 'bg-gray-500';
 
@@ -55,15 +70,29 @@ export default function NewsCard({ news, index = 0 }: NewsCardProps) {
               src={news.imageUrl}
               alt={news.title}
               className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+              onError={(e) => {
+                // Fallback to category-based gradient if image fails to load
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+                const fallback = target.nextElementSibling as HTMLElement;
+                if (fallback) fallback.style.display = 'flex';
+              }}
             />
-          ) : (
-            <div className="w-full h-full bg-gradient-to-br from-blue-400 to-purple-600 flex items-center justify-center">
-              <div className="text-white text-center">
-                <Tag className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p className="text-sm opacity-75">AI Generated</p>
-              </div>
+          ) : null}
+          
+          {/* Fallback gradient - always present but hidden if image loads */}
+          <div 
+            className={`w-full h-full ${getCategoryGradient(news.category)} flex items-center justify-center ${
+              news.imageUrl ? 'hidden' : 'flex'
+            }`}
+            style={{ display: news.imageUrl ? 'none' : 'flex' }}
+          >
+            <div className="text-white text-center">
+              <Tag className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p className="text-sm opacity-75 font-medium">{news.category.toUpperCase()}</p>
+              <p className="text-xs opacity-60">AI Generated News</p>
             </div>
-          )}
+          </div>
           
           {/* Category Badge */}
           <div className={`absolute top-4 left-4 ${categoryColor} text-white px-3 py-1 rounded-full text-xs font-medium shadow-lg`}>
