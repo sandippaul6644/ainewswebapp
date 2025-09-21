@@ -1,4 +1,5 @@
 import express from 'express';
+import path from 'path';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -51,6 +52,18 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
+
+// Serve static files in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static('dist'));
+  
+  // Handle React Router
+  app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api')) {
+      res.sendFile(path.join(process.cwd(), 'dist', 'index.html'));
+    }
+  });
+}
 
 // Initialize server
 const initializeServer = async () => {
