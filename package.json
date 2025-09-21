@@ -4,16 +4,13 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "npm run kill-port && concurrently \"npm run server\" \"vite\"",
+    "dev": "concurrently \"npm run server\" \"vite\"",
+    "prod": "node server/index.js",
     "server": "nodemon server/index.js",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "generate-news": "node server/scripts/generateNews.js",
-
-    "kill-port": "pkill -f 'node.*server' || true",
-    "start": "npm run kill-port && npm run dev",
-    "start:prod": "node server/index.js"
+    "generate-news": "node server/scripts/generateNews.js"
   },
   "dependencies": {
     "axios": "^1.6.0",
