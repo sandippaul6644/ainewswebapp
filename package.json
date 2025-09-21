@@ -12,7 +12,8 @@
     "generate-news": "node server/scripts/generateNews.js",
 
     "kill-port": "kill-port.bat",
-    "start": "npm run kill-port && npm run dev"
+    "start": "npm run kill-port && npm run dev",
+    "start:prod": "node server/index.js"
   },
   "dependencies": {
     "axios": "^1.6.0",
