@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "generate-news": "node server/scripts/generateNews.js",
 
-    "kill-port": "kill-port.bat",
+    "kill-port": "pkill -f 'node.*server' || true",
     "start": "npm run kill-port && npm run dev",
     "start:prod": "node server/index.js"
   },
