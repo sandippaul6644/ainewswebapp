@@ -166,49 +166,36 @@ const generateNewsArticle = async (category, location) => {
 };
 
 const generateNewsImage = async (title, category, location) => {
-  if (!imageGenerationEnabled) {
-    console.log(`⚠️ Image generation disabled, using fallback`);
-    const keywords = extractImageKeywords(title, category, location);
-    const searchQuery = keywords.join(',');
-    return `https://source.unsplash.com/800x600/?${encodeURIComponent(searchQuery)}`;
-  }
-
   try {
-    checkImageQuota();
-    console.log(`🎨 Generating AI image for: ${title.substring(0, 40)}...`);
+    const keywords = extractImageKeywords(title, category, location);
+    const searchQuery = keywords[0]; // Use primary keyword
     
-    const imagePrompt = createImagePrompt(title, category, location);
-    console.log(`📝 Image prompt: ${imagePrompt.substring(0, 100)}...`);
-    
-    const response = await openai.images.generate({
-      model: "dall-e-3",
-      prompt: imagePrompt,
-      n: 1,
-      size: "1024x1024",
-      quality: "standard",
-      style: "natural"
-    });
-    
-    if (response.data && response.data[0]) {
-      dailyImageUsage++;
-      console.log(`✅ Generated AI image (${dailyImageUsage}/${dailyImageQuota} daily)`);
-      return response.data[0].url;
+    // Try Pexels API first
+    const pexelsApiKey = process.env.PEXELS_API_KEY;
+    if (pexelsApiKey) {
+      const response = await fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(searchQuery)}&per_page=10`, {
+        headers: { 'Authorization': pexelsApiKey }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.photos && data.photos.length > 0) {
+          const randomPhoto = data.photos[Math.floor(Math.random() * data.photos.length)];
+          console.log(`📸 Using Pexels image for: ${searchQuery}`);
+          return randomPhoto.src.large;
+        }
+      }
     }
     
-    throw new Error('No image generated');
+    // Fallback to Unsplash
+    const fallbackUrl = `https://source.unsplash.com/800x600/?${encodeURIComponent(searchQuery)}`;
+    console.log(`📸 Using Unsplash fallback for: ${searchQuery}`);
+    return fallbackUrl;
     
   } catch (error) {
-    if (error.message.includes('quota')) {
-      console.log(`⚠️ ${error.message} - Using fallback image`);
-    } else {
-      console.error('❌ DALL-E failed:', error.message);
-    }
-    
+    console.error('❌ Stock image fetch failed:', error.message);
     const keywords = extractImageKeywords(title, category, location);
-    const searchQuery = keywords.join(',');
-    const fallbackUrl = `https://source.unsplash.com/800x600/?${encodeURIComponent(searchQuery)}`;
-    console.log(`📸 Using fallback image for: ${searchQuery}`);
-    return fallbackUrl;
+    return `https://source.unsplash.com/800x600/?${encodeURIComponent(keywords[0])}`;
   }
 };
 
