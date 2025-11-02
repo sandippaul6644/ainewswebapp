@@ -140,6 +140,16 @@ app.get('/api/test-db', async (req, res) => {
   }
 });
 
+// Simple news test route
+app.get('/api/test-news', async (req, res) => {
+  try {
+    const news = await News.findOne().select('title category');
+    res.json({ message: 'News query works', sample: news });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Server info endpoint
 app.get('/api/server-info', (req, res) => {
   res.json({
