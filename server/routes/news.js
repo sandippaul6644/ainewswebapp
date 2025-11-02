@@ -48,24 +48,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Get single news article
-router.get('/:slug', async (req, res) => {
-  try {
-    const news = await News.findOne({ slug: req.params.slug });
-    if (!news) {
-      return res.status(404).json({ error: 'News article not found' });
-    }
-
-    // Increment views
-    await News.findByIdAndUpdate(news._id, { $inc: { views: 1 } });
-
-    res.json(news);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get trending news
+// Get trending news (must be before /:slug)
 router.get('/trending/latest', async (req, res) => {
   try {
     const trending = await News.find({ trending: true })
@@ -79,7 +62,7 @@ router.get('/trending/latest', async (req, res) => {
   }
 });
 
-// Get featured news
+// Get featured news (must be before /:slug)
 router.get('/featured/latest', async (req, res) => {
   try {
     const featured = await News.find({ featured: true })
@@ -88,6 +71,23 @@ router.get('/featured/latest', async (req, res) => {
       .select('-content');
 
     res.json(featured);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get single news article (must be after specific routes)
+router.get('/:slug', async (req, res) => {
+  try {
+    const news = await News.findOne({ slug: req.params.slug });
+    if (!news) {
+      return res.status(404).json({ error: 'News article not found' });
+    }
+
+    // Increment views
+    await News.findByIdAndUpdate(news._id, { $inc: { views: 1 } });
+
+    res.json(news);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
