@@ -125,6 +125,21 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Simple test route
+app.get('/api/test', (req, res) => {
+  res.json({ message: 'Test route works', timestamp: new Date().toISOString() });
+});
+
+// Test MongoDB connection
+app.get('/api/test-db', async (req, res) => {
+  try {
+    const count = await News.countDocuments();
+    res.json({ message: 'Database works', count });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Server info endpoint
 app.get('/api/server-info', (req, res) => {
   res.json({
