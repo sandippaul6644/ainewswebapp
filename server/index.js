@@ -112,8 +112,8 @@ const initializeServer = async () => {
   }
 };
 
-// Routes
-app.use('/api/news', newsRoutes);
+// Routes (temporarily disabled to debug)
+// app.use('/api/news', newsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
