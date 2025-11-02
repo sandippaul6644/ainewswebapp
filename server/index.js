@@ -76,6 +76,11 @@ const initializeServer = async () => {
     const newsCount = await News.countDocuments();
     console.log(`Found ${newsCount} news articles in database`);
     
+    // Skip initial generation to start server immediately
+    console.log(`Found ${newsCount} news articles in database. Starting server...`);
+    
+    // Uncomment below to generate initial news (will delay server start)
+    /*
     if (newsCount < 40) {
       console.log(`📊 Insufficient news data (${newsCount}/40). Generating real AI news for all categories...`);
       try {
@@ -89,6 +94,7 @@ const initializeServer = async () => {
     } else {
       console.log('✅ Sufficient news data found. Server ready.');
     }
+    */
     
     // Start the server after database is ready
     await startServer();
