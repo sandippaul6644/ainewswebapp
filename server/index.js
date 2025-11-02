@@ -104,7 +104,7 @@ const initializeServer = async () => {
     await startServer();
     
     // Setup cron jobs after server starts
-    // setupCronJobs(); // Disabled to prevent API hanging
+    setupCronJobs();
     
   } catch (error) {
     console.error('Initialization error:', error);
@@ -112,8 +112,8 @@ const initializeServer = async () => {
   }
 };
 
-// Routes (temporarily disabled to debug)
-// app.use('/api/news', newsRoutes);
+// Routes
+app.use('/api/news', newsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
