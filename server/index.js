@@ -48,7 +48,11 @@ const startServer = () => {
 };
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  crossOriginOpenerPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  contentSecurityPolicy: false
+}));
 app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
