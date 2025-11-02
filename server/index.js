@@ -104,7 +104,7 @@ const initializeServer = async () => {
     await startServer();
     
     // Setup cron jobs after server starts
-    setupCronJobs();
+    // setupCronJobs(); // Disabled to prevent API hanging
     
   } catch (error) {
     console.error('Initialization error:', error);
